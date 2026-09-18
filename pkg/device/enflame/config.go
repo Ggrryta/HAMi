@@ -19,13 +19,34 @@ package enflame
 import "flag"
 
 var (
-	EnflameResourceNameGCU            string
+	EnflameResourceNameGCU string
+	// EnflameResourceNameDRSGCU is the resolved DRS-GCU resource name:
+	// yaml (new key > legacy key) > --enflame-drs-gcu-resource-name >
+	// --enflame-vgcu-resource-name > default. It is only guaranteed
+	// non-empty after InitEnflameDevice has run; flag parsing alone
+	// leaves it empty when the flags are unset.
 	EnflameResourceNameDRSGCU         string
 	EnflameResourceNameGCUMemory      string
 	EnflameResourceNameGCUCore        string
 	EnflameResourceNameVGCU           string
 	EnflameResourceNameVGCUPercentage string
+
+	// enflameDRSGCUFlagName holds the parsed value of
+	// --enflame-drs-gcu-resource-name. Kept separate from the resolved
+	// EnflameResourceNameDRSGCU so InitEnflameDevice can apply a
+	// deterministic precedence on every call, even when called repeatedly.
+	enflameDRSGCUFlagName string
+
+	// enflameVGCULegacyFlagName holds the parsed value of the deprecated
+	// --enflame-vgcu-resource-name flag. It used to share a binding with
+	// --enflame-drs-gcu-resource-name, which made the effective resource name
+	// depend on the order of the command line arguments (issue #3016).
+	enflameVGCULegacyFlagName string
 )
+
+// defaultEnflameDRSGCUResourceName is the fallback resource name for the
+// DRS-GCU device when neither the yaml config nor any flag provides one.
+const defaultEnflameDRSGCUResourceName = "enflame.com/drs-gcu"
 
 type EnflameConfig struct {
 	// GCU
@@ -46,11 +67,13 @@ func ParseConfig(fs *flag.FlagSet) {
 	fs.StringVar(&EnflameResourceNameGCU, "enflame-gcu-resource-name", "enflame.com/gcu", "enflame gcu resource name")
 
 	// DRS-GCU.
-	fs.StringVar(&EnflameResourceNameDRSGCU, "enflame-drs-gcu-resource-name", "enflame.com/drs-gcu", "enflame drs gcu resource name")
+	fs.StringVar(&enflameDRSGCUFlagName, "enflame-drs-gcu-resource-name", "", "enflame drs gcu resource name (defaults to "+defaultEnflameDRSGCUResourceName+")")
 	fs.StringVar(&EnflameResourceNameGCUMemory, "enflame-gcu-memory-resource-name", "enflame.com/gcu-memory", "enflame gcu memory request resource name")
 	fs.StringVar(&EnflameResourceNameGCUCore, "enflame-gcu-core-resource-name", "enflame.com/gcu-core", "enflame gcu core request resource name")
-	// Legacy flag alias for backward compatibility.
-	fs.StringVar(&EnflameResourceNameDRSGCU, "enflame-vgcu-resource-name", "enflame.com/drs-gcu", "legacy enflame vgcu resource name, now maps to drs-gcu")
+	// Legacy flag alias for backward compatibility. Bound to its own variable
+	// so the two flags no longer fight over one binding; InitEnflameDevice
+	// resolves them with a deterministic precedence (issue #3016).
+	fs.StringVar(&enflameVGCULegacyFlagName, "enflame-vgcu-resource-name", "", "legacy enflame vgcu resource name, aliases the drs-gcu resource name when the new flag is unset")
 	// Legacy shared-GCU related flags.
 	fs.StringVar(&EnflameResourceNameVGCU, "enflame-vgcu-legacy-resource-name", "enflame.com/vgcu", "legacy enflame shared gcu count resource name")
 	fs.StringVar(&EnflameResourceNameVGCUPercentage, "enflame-vgcu-percentage-resource-name", "enflame.com/vgcu-percentage", "enflame shared gcu percentage resource name")

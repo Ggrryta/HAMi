@@ -82,12 +82,31 @@ type assignedContainerInfo struct {
 }
 
 func InitEnflameDevice(config EnflameConfig) *EnflameDevices {
+	// Resolve the resource name with a deterministic precedence so the
+	// result never depends on the order of the command line arguments
+	// (issue #3016): yaml (new key > legacy key) > new flag > legacy flag
+	// alias > default. The flag values live in dedicated variables, so
+	// repeated calls cannot leak a previously resolved value back into
+	// the fallback chain.
+	if enflameDRSGCUFlagName != "" && enflameVGCULegacyFlagName != "" && enflameDRSGCUFlagName != enflameVGCULegacyFlagName {
+		klog.Warningf("both --enflame-drs-gcu-resource-name (%s) and --enflame-vgcu-resource-name (%s) are set; using %s",
+			enflameDRSGCUFlagName, enflameVGCULegacyFlagName, enflameDRSGCUFlagName)
+	}
+	if (config.ResourceNameDRSGCU != "" || config.ResourceNameVGCU != "") && (enflameDRSGCUFlagName != "" || enflameVGCULegacyFlagName != "") {
+		klog.Warning("the enflame resource name flags are ignored because the yaml config already sets the resource name")
+	}
 	EnflameResourceNameDRSGCU = config.ResourceNameDRSGCU
 	if EnflameResourceNameDRSGCU == "" {
 		EnflameResourceNameDRSGCU = config.ResourceNameVGCU
 	}
 	if EnflameResourceNameDRSGCU == "" {
-		EnflameResourceNameDRSGCU = "enflame.com/drs-gcu"
+		EnflameResourceNameDRSGCU = enflameDRSGCUFlagName
+	}
+	if EnflameResourceNameDRSGCU == "" {
+		EnflameResourceNameDRSGCU = enflameVGCULegacyFlagName
+	}
+	if EnflameResourceNameDRSGCU == "" {
+		EnflameResourceNameDRSGCU = defaultEnflameDRSGCUResourceName
 	}
 	EnflameResourceNameGCUMemory = config.ResourceNameMemory
 	if EnflameResourceNameGCUMemory == "" {
